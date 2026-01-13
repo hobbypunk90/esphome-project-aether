@@ -1,0 +1,27 @@
+button:
+  - platform: restart
+    name: Restart
+    id: btn_restart
+    entity_category: "diagnostic"
+  - platform: factory_reset
+    name: Factory reset
+    entity_category: "diagnostic"
+    disabled_by_default: true
+  
+sensor:
+  - platform: wifi_signal # Reports the WiFi signal strength in dB
+    name: WiFi Signal dB
+    id: wifi_signal_db
+    update_interval: 15s
+  - platform: copy # Reports the WiFi signal strength in %
+    source_id: wifi_signal_db
+    name: "WiFi Signal Percent"
+    id: wifi_signal_percent
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    entity_category: "diagnostic"
+    device_class: ""
+  - platform: uptime
+    type: seconds
+    name: "Uptime"
