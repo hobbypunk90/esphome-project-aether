@@ -25,6 +25,7 @@ logger:
 
 # API is a requirement of the dashboard import.
 api:
+  id: api_default
 
 # OTA is required for Over-the-Air updating
 ota:
