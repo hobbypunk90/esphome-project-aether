@@ -1,3 +1,27 @@
+substitutions:
+  i2c_sda: GPIO1
+  i2c_scl: GPIO2
+
+  spi_mosi: GPIO12
+  spi_clk: GPIO11
+
+  display_cs: GPIO10
+  display_dc: GPIO9
+  display_reset: GPIO8
+  display_busy: GPIO7
+
+  led_pin: GPIO13
+  led_rgb_order: GRB
+  led_chipset: WS2812
+  led_count: 1
+
+  shtcx_address: 0x70
+  ens160_address: 0x52
+  sps30_address: 0x69
+  scd4x_address: 0x62
+  bmp280_address: 0x76
+
+
 esphome:
   name: air-quality
   friendly_name: Indoor Air Quality
@@ -134,16 +158,16 @@ time:
   - platform: sntp
     id: time1
 i2c:
-  sda: GPIO1
-  scl: GPIO2
+  sda: ${i2c_sda}
+  scl: ${i2c_scl}
   scan: true
 spi:
-  mosi_pin: GPIO12
-  clk_pin: GPIO11
+  mosi_pin: ${spi_mosi}
+  clk_pin: ${spi_clk}
 
 sensor:
   - platform: shtcx
-    address: 0x70
+    address: ${shtcx_address}
     temperature:
       id: temperature
       name: Temperatur
@@ -154,7 +178,7 @@ sensor:
       icon: 'mdi:water-percent'
     update_interval: 5s
   - platform: ens160_i2c
-    address: 0x52
+    address: ${ens160_address}
     eco2:
       name: eCO2
     tvoc:
@@ -177,7 +201,7 @@ sensor:
       humidity: humidity
     update_interval: 15s
   - platform: sps30
-    address: 0x69
+    address: ${sps30_address}
     update_interval: 15s
     auto_cleaning_interval: 345600s # 4d
     pm_1_0:
@@ -248,10 +272,12 @@ sensor:
       name: "Partikelanzahl <10µm"
       disabled_by_default: True
   - platform: scd4x
+    address: ${scd4x_address}
+    update_interval: 15s
+    ambient_pressure_compensation_source: pressure
     co2:
       name: CO2
       id: co2
-      # output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
       on_value: 
         then:
           - sensor.template.publish:
@@ -263,15 +289,12 @@ sensor:
                   if (1500 < x && x <= 2500) return  40.0 + ((21.0 -  40.0) / (2500.0 - 1500.0)) * (x - 1500);
                   if (2500 < x && x <= 4000) return  20.0 + (( 0.0 -  20.0) / (4000.0 - 2500.0)) * (x - 2500);
                   return -1;
-    address: 0x62
-    update_interval: 15s
-    ambient_pressure_compensation_source: pressure
   - platform: bmp280_i2c
+    address: ${bmp280_address}
+    update_interval: 15s
     pressure:
       id: pressure
       name: Luftdruck
-    address: 0x76
-    update_interval: 15s
 
   - name: iAQI CO2
     id: iaqi_co2
@@ -417,12 +440,12 @@ interval:
 
 light:
   - platform: esp32_rmt_led_strip
-    rgb_order: GRB
-    pin: GPIO13
-    num_leds: 1
+    rgb_order: ${led_rgb_order}
+    pin: ${led_pin}
+    num_leds: ${led_count}
     name: iAQI LED
     id: iaqi_led
-    chipset: WS2812
+    chipset: ${led_chipset}
     restore_mode: ALWAYS_OFF
 
 select:
@@ -448,10 +471,10 @@ display:
   - platform: waveshare_epaper
     id: primary_display
     rotation: 180°
-    cs_pin: GPIO10
-    dc_pin: GPIO9
-    reset_pin: GPIO8
-    busy_pin: GPIO7
+    cs_pin: ${display_cs}
+    dc_pin: ${display_dc}
+    reset_pin: ${display_reset}
+    busy_pin: ${display_busy}
     model: 1.54inv2
     update_interval: never
     full_update_every: 600
