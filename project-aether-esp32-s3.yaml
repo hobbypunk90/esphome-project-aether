@@ -143,8 +143,8 @@ font:
     glyphsets:
       - GF_Latin_Core
     glyphs:
-      - "µ"             # Das Mikro-Zeichen
-      - "³"             # Die hochgestellte Drei
+      - "µ"
+      - "³"
     extras:
       file:
         url: https://github.com/Templarian/MaterialDesign-Webfont/raw/refs/tags/v7.4.47/fonts/materialdesignicons-webfont.ttf
@@ -166,16 +166,21 @@ spi:
   clk_pin: ${spi_clk}
 
 sensor:
+  # Hardware Sensors
   - platform: shtcx
     address: ${shtcx_address}
     temperature:
       id: temperature
       name: Temperatur
       icon: 'mdi:thermometer'
+      filters: 
+        - offset: !lambda return id(temperature_offset).state;
     humidity: 
       id: humidity
       name: Luftfeuchtigkeit
       icon: 'mdi:water-percent'
+      filters:
+        - offset: !lambda return id(humidity_offset).state;
     update_interval: 5s
   - platform: ens160_i2c
     address: ${ens160_address}
@@ -184,7 +189,6 @@ sensor:
     tvoc:
       id: voc
       name: VOC
-      # output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
       on_value: 
         then:
           - sensor.template.publish:
@@ -207,7 +211,6 @@ sensor:
     pm_1_0:
       id: pm_1_0
       name: "Feinstaub <1µm"
-      # output = output_start + ((output_end - output_start) / (input_end - input_start)) * (input - input_start)
       on_value: 
         then:
           - sensor.template.publish:
@@ -272,6 +275,7 @@ sensor:
       name: "Partikelanzahl <10µm"
       disabled_by_default: True
   - platform: scd4x
+    id: scd41
     address: ${scd4x_address}
     update_interval: 15s
     ambient_pressure_compensation_source: pressure
@@ -296,6 +300,7 @@ sensor:
       id: pressure
       name: Luftdruck
 
+  # iAQI Sensors
   - name: iAQI CO2
     id: iaqi_co2
     icon: mdi:leaf
@@ -365,7 +370,6 @@ sensor:
     id: iaqi
     icon: mdi:leaf
     platform: template
-    update_interval: 5s
     accuracy_decimals: 0
     device_class: aqi
     filters:
@@ -376,30 +380,11 @@ sensor:
       - sliding_window_moving_average:
           window_size: 12
           send_every: 1
-    lambda: !lambda |-
-      int s_voc     = id(iaqi_voc).state;
-      int s_co2     = id(iaqi_co2).state;
-      int s_pm_1_0  = id(iaqi_pm_1_0).state;
-      int s_pm_2_5  = id(iaqi_pm_2_5).state;
-      int s_pm_10_0 = id(iaqi_pm_10_0).state;
-
-      if (isnan(s_voc) && isnan(s_co2) && isnan(s_pm_1_0) && isnan(s_pm_2_5) && isnan(s_pm_10_0) && isnan(s_pm_10_0)) {
-         return {}; // Wartet wirklich auf den allerersten Wert
-      }
-
-      if (isnan(s_voc)) s_voc = 100.0;
-      if (isnan(s_co2)) s_co2 = 100.0;
-      if (isnan(s_pm_1_0)) s_pm_1_0 = 100.0;
-      if (isnan(s_pm_2_5)) s_pm_2_5 = 100.0;
-      if (isnan(s_pm_10_0)) s_pm_10_0 = 100.0;
-
-      return std::min({s_voc, s_co2, s_pm_1_0, s_pm_2_5, s_pm_10_0});
     on_value:
       then:
         - light.turn_on:
             id: iaqi_led
-            # Helligkeit: 30% reicht meistens indoor völlig aus
-            brightness: 30% 
+            brightness: !lambda return id(led_brightness).state / 100.0;
             red: !lambda |-
               float s = x; // x ist der aktuelle Score (0-100)
               // Logik für ROT-Kanal
@@ -421,7 +406,50 @@ sensor:
               if (s < 20) return 1.0;    // Lila -> Voll Blau
               return 0.0;                // Sonst kein Blau
             transition_length: 2s
+text_sensor:
+  - name: iAQI Quelle
+    id: iaqi_source
+    icon: mdi:leaf
+    platform: template
+    disabled_by_default: True
+    update_interval: 5s
+    lambda: !lambda |-
+      int s_voc     = id(iaqi_voc).state;
+      int s_co2     = id(iaqi_co2).state;
+      int s_pm_1_0  = id(iaqi_pm_1_0).state;
+      int s_pm_2_5  = id(iaqi_pm_2_5).state;
+      int s_pm_10_0 = id(iaqi_pm_10_0).state;
+      
+      if (!isnan(s_voc) || !isnan(s_co2) || !isnan(s_pm_1_0) || !isnan(s_pm_2_5) || !isnan(s_pm_10_0) || !isnan(s_pm_10_0)) {
+        if (isnan(s_voc)) s_voc = 100;
+        if (isnan(s_co2)) s_co2 = 100;
+        if (isnan(s_pm_1_0)) s_pm_1_0 = 100;
+        if (isnan(s_pm_2_5)) s_pm_2_5 = 100;
+        if (isnan(s_pm_10_0)) s_pm_10_0 = 100;
 
+        int min = std::min({s_voc, s_co2, s_pm_1_0, s_pm_2_5, s_pm_10_0});
+
+        if (min == s_voc) return {"VOC"};
+        if (min == s_co2) return {"CO2"};
+        if (min == s_pm_1_0) return {"PM1.0"};
+        if (min == s_pm_2_5) return {"PM2.5"};
+        if (min == s_pm_10_0) return {"PM10.0"};
+      }
+      return {"invalid"};
+    on_value:
+      then:
+        - lambda: |-
+            if (x == "VOC") {
+              id(iaqi).publish_state(id(iaqi_voc).state);
+            } else if (x == "CO2") {
+              id(iaqi).publish_state(id(iaqi_co2).state);
+            } else if (x == "PM1.0") {
+              id(iaqi).publish_state(id(iaqi_pm_1_0).state);
+            } else if (x == "PM2.5") {
+              id(iaqi).publish_state(id(iaqi_pm_2_5).state);
+            } else if (x == "PM10.0") {
+              id(iaqi).publish_state(id(iaqi_pm_10_0).state);
+            }
 interval:
   - interval: 2.5s
     then:
@@ -447,6 +475,76 @@ light:
     id: iaqi_led
     chipset: ${led_chipset}
     restore_mode: ALWAYS_OFF
+
+number:
+  - name: LED Helligkeit
+    id: led_brightness
+    platform: template
+    entity_category: "config"
+    initial_value: 30
+    min_value: 0
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    optimistic: True
+    restore_value: True
+    on_value:
+      if:
+        condition:
+          light.is_on: iaqi_led
+        then:
+          - light.turn_on:
+              id: iaqi_led
+              brightness: !lambda return id(led_brightness).state / 100.0;
+
+  - name: Temperatur Offset
+    id: temperature_offset
+    platform: template
+    entity_category: "config"
+    initial_value: 1.5
+    min_value: -10.0
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "°C"
+    optimistic: True
+    restore_value: True
+  - name: Luftfeuchtigkeit Offset
+    id: humidity_offset
+    platform: template
+    entity_category: "config"
+    initial_value: 0
+    min_value: -10.0
+    max_value: 10.0
+    step: 0.1
+    unit_of_measurement: "%"
+    optimistic: True
+    restore_value: True
+  - name: CO2 Kalibrierungswert
+    id: co2_calibration_value
+    platform: template
+    entity_category: "config"
+    initial_value: 430
+    min_value: 0
+    max_value: 2000
+    step: 1
+    unit_of_measurement: "ppm"
+    optimistic: True
+    restore_value: True
+
+button:
+  - platform: template
+    name: "CO2 Kalibrierung"
+    id: co2_calibration_btn
+    icon: "mdi:auto-fix"
+    entity_category: config
+    on_press:
+      - logger.log: 
+          format: "Starte manuelle Kalibrierung auf %.0f ppm..."
+          args: [ 'id(co2_calibration_value).state' ]
+      - scd4x.perform_forced_calibration:
+          id: scd41
+          value: !lambda return id(co2_calibration_value).state;
+      - delay: 2s
 
 select:
   - name: Pages
@@ -588,22 +686,17 @@ display:
 
             if (!isnan(iaqi_s)) {
               integer_text = "";
-              int iaqi_voc_s = id(iaqi_voc).state;
-              int iaqi_co2_s = id(iaqi_co2).state;
-              int iaqi_pm_1_0_s = id(iaqi_pm_1_0).state;
-              int iaqi_pm_2_5_s = id(iaqi_pm_2_5).state;
-              int iaqi_pm_10_0_s = id(iaqi_pm_10_0).state;
 
-              if (!isnan(iaqi_voc_s) && iaqi_voc_s     <= iaqi_s + 2) {
+              if (id(iaqi_source).state == "VOC") {
                 // https://atmotube.com/blog/voc-concentrations-in-air-units-of-measurement
                 integer_text = str_sprintf("%s %.2f mg/m³", "\U000F0095", 4.09 * id(voc).state);
-              } else if (!isnan(iaqi_co2_s) && iaqi_co2_s     <= iaqi_s + 2) {
+              } else if (id(iaqi_source).state == "CO2") {
                 integer_text = str_sprintf("%s %.0f ppm", "\U000F07E4", id(co2).state);
-              } else if (!isnan(iaqi_pm_1_0_s) && iaqi_pm_1_0_s  <= iaqi_s + 2) {
+              } else if (id(iaqi_source).state == "PM1.0") {
                 integer_text = str_sprintf("%s %.2f µg/m³", "\U000F0D7C", id(pm_1_0).state);
-              } else if (!isnan(iaqi_pm_2_5_s) && iaqi_pm_2_5_s  <= iaqi_s + 2) {
+              } else if (id(iaqi_source).state == "PM2.5") {
                 integer_text = str_sprintf("%s %.2f µg/m³", "\U000F0D7C", id(pm_2_5).state);
-              } else if (!isnan(iaqi_pm_10_0_s) && iaqi_pm_10_0_s <= iaqi_s + 2) {
+              } else if (id(iaqi_source).state == "PM10.0") {
                 integer_text = str_sprintf("%s %.2f µg/m³", "\U000F0D7C", id(pm_10_0).state);
               }
               auto integer_width = area.get_text_width(id(font_second_page_small), integer_text.c_str());
