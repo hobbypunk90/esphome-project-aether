@@ -174,13 +174,25 @@ sensor:
       name: Temperatur
       icon: 'mdi:thermometer'
       filters: 
+        - sliding_window_moving_average:
+            window_size: 3
+            send_every: 1
         - offset: !lambda return id(temperature_offset).state;
+        - or:
+            - delta: 0.1
+            - heartbeat: 600s
     humidity: 
       id: humidity
       name: Luftfeuchtigkeit
       icon: 'mdi:water-percent'
       filters:
+        - sliding_window_moving_average:
+            window_size: 3
+            send_every: 1
         - offset: !lambda return id(humidity_offset).state;
+        - or:
+            - delta: 0.1
+            - heartbeat: 600s
     update_interval: 5s
   - platform: ens160_i2c
     address: ${ens160_address}
