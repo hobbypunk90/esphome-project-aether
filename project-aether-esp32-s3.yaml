@@ -168,6 +168,7 @@ spi:
 sensor:
   # Hardware Sensors
   - platform: shtcx
+    id: hw_shtcx
     address: ${shtcx_address}
     temperature:
       id: temperature
@@ -195,6 +196,7 @@ sensor:
             - heartbeat: 600s
     update_interval: 5s
   - platform: ens160_i2c
+    id: hw_ens160
     address: ${ens160_address}
     eco2:
       name: eCO2
@@ -217,6 +219,7 @@ sensor:
       humidity: humidity
     update_interval: 15s
   - platform: sps30
+    id: hw_sps30
     address: ${sps30_address}
     update_interval: 15s
     auto_cleaning_interval: 345600s # 4d
@@ -287,7 +290,7 @@ sensor:
       name: "Partikelanzahl <10µm"
       disabled_by_default: True
   - platform: scd4x
-    id: scd41
+    id: hw_scd41
     address: ${scd4x_address}
     update_interval: 15s
     ambient_pressure_compensation_source: pressure
@@ -306,6 +309,7 @@ sensor:
                   if (2500 < x && x <= 4000) return  20.0 + (( 0.0 -  20.0) / (4000.0 - 2500.0)) * (x - 2500);
                   return -1;
   - platform: bmp280_i2c
+    id: hw_bmp280
     address: ${bmp280_address}
     update_interval: 15s
     pressure:
@@ -493,10 +497,10 @@ number:
     id: led_brightness
     platform: template
     entity_category: "config"
-    initial_value: 30
-    min_value: 0
+    initial_value: 75
+    min_value: 11
     max_value: 100
-    step: 5
+    step: 1
     unit_of_measurement: "%"
     optimistic: True
     restore_value: True
@@ -554,7 +558,7 @@ button:
           format: "Starte manuelle Kalibrierung auf %.0f ppm..."
           args: [ 'id(co2_calibration_value).state' ]
       - scd4x.perform_forced_calibration:
-          id: scd41
+          id: hw_scd41
           value: !lambda return id(co2_calibration_value).state;
       - delay: 2s
 
